@@ -11,6 +11,8 @@ services:
         value: "20078321"
       - key: API_HASH
         value: "c8ed904e4aac83cea1f27b73984debad"
+      - key: STORAGE_CHANNEL_ID
+        value: "-1002335122520"
       - key: BOT_TOKEN
         value: "7418613978:AAEHUVhLxmDKjX-kv9HB69mBPR7NU2dmxbE"
       - key: MONGO_DB_URI
