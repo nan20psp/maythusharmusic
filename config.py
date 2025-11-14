@@ -11,10 +11,6 @@ load_dotenv()
 API_ID = int(getenv("API_ID", None))
 API_HASH = getenv("API_HASH", None)
 
-MONGO_URL = getenv("MONGO_URL", "mongodb+srv://wanglinmongodb:wanglin@renegadeimmortal.o1qj9yf.mongodb.net/?retryWrites=true&w=majority")
-
-STORAGE_CHANNEL_ID = -1002335122520
-
 #COOKIE_URL = getenv("https://batbin.me/difluence")
 
 API_URL = getenv("API_URL", "https://api.thequickearn.xyz")
