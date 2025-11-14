@@ -10,7 +10,16 @@ from pyrogram.enums import MessageEntityType
 from pyrogram.types import Message
 from youtubesearchpython.__future__ import VideosSearch
 
-from maythusharmusic.utils.database import is_on_off
+# --- (ဒီနေရာကို ပြင်ဆင်/ထပ်ထည့်ပါ) ---
+from maythusharmusic.utils.database import (
+    is_on_off,
+    get_yt_cache,  # Search Result Cache
+    save_yt_cache, # Search Result Cache
+    get_cached_song_path,  # File Path Cache
+    save_cached_song_path, # File Path Cache
+    remove_cached_song_path # File Path Cache
+)
+# --- (ဒီနေရာအထိ) ---
 from maythusharmusic.utils.formatters import time_to_seconds
 
 import os
@@ -51,7 +60,7 @@ def get_random_api_key():
     """Randomly select an API key from the list"""
     return random.choice(API_KEYS)
 
-API_BASE_URL = "http://deadlinetech.site"
+API_BASE_URL = "https://tgmusic.fallenapi.fun"
 
 MIN_FILE_SIZE = 51200
 
@@ -270,11 +279,12 @@ class YouTubeAPI:
             return None
         return text[offset : offset + length]
 
-    # --- START: Caching Logic Functions ---
+    # --- START: Caching Logic Functions (MongoDB ထည့်သွင်းထားသည်) ---
 
     async def _fetch_from_youtube(self, link: str):
         """
-        YouTube ကို တကယ်သွားရှာမယ့် private function အသစ်
+        YouTube ကို တကယ်သွားရှာမယ့် private function
+        (MongoDB Cache သို့ သိမ်းဆည်းခြင်း ထပ်တိုးထားသည်)
         """
         results = VideosSearch(link, limit=1)
         try:
@@ -304,39 +314,64 @@ class YouTubeAPI:
             "link": yturl, # track method အတွက်
         }
         
-        # Cache ထဲကို vidid ကို key အနေနဲ့ သုံးပြီး သိမ်းထားပါ
+        # --- START: Cache Logic (In-Memory & MongoDB) ---
+        
+        # 1. In-memory cache ထဲကို vidid ကို key အနေနဲ့ သုံးပြီး သိမ်းထားပါ
         self._search_cache[vidid] = video_details
-        # Link ကို key အနေနဲ့ သုံးပြီးလည်း သိမ်းထားနိုင်ပါတယ်
+        # 2. In-memory cache ထဲကို Link ကို key အနေနဲ့ သုံးပြီးလည်း သိမ်းထားပါ
         self._search_cache[link] = video_details
+        
+        # 3. MongoDB Cache (ytcache_db) ထဲကို vidid ကို key အနေနဲ့ သုံးပြီး သိမ်းပါ
+        await save_yt_cache(vidid, video_details)
+        # 4. MongoDB Cache (ytcache_db) ထဲကို Link ကို key အနေနဲ့ သုံးပြီးလည်း သိမ်းပါ
+        await save_yt_cache(link, video_details)
+        
+        logger.info(f"Saved Search Result to MongoDB Cache: {vidid} / {link}")
+        
+        # --- END: Cache Logic ---
         
         return video_details
 
     async def _get_video_details(self, link: str, videoid: Union[bool, str] = None):
         """
         အချက်အလက် လိုအပ်တိုင်း ဒီ function ကို ခေါ်သုံးပါမယ်။
-        ဒါက Cache ကို အရင်စစ်ပါမယ်။
+        ဒါက Cache ကို အရင်စစ်ပါမယ်။ (In-Memory + MongoDB)
         """
         if videoid:
             link = self.base + link
         if "&" in link:
             link = link.split("&")[0]
 
-        # 1. Cache ထဲမှာ link နဲ့ အရင်ရှာကြည့်ပါ
-        if link in self._search_cache:
-            return self._search_cache[link]
+        # 1. Cache Key ကို သတ်မှတ်ပါ (link ကို key အဖြစ် သုံးပါမည်)
+        cache_key = link
+
+        # 2. In-Memory Cache (Dictionary) ထဲမှာ အရင်ရှာကြည့်ပါ
+        if cache_key in self._search_cache:
+            logger.info(f"Cache Hit (Memory): {cache_key}")
+            return self._search_cache[cache_key]
             
-        # 2. Cache ထဲမှာမရှိရင် YouTube ကို တကယ်သွားရှာပါ
+        # 3. MongoDB Cache (ytcache_db) ထဲမှာ ရှာကြည့်ပါ
+        mongo_details = await get_yt_cache(cache_key)
+        if mongo_details:
+            logger.info(f"Cache Hit (MongoDB): {cache_key}")
+            # MongoDB မှာတွေ့ရင် In-Memory cache ထဲကို ပြန်ထည့်ပါ
+            self._search_cache[cache_key] = mongo_details
+            if mongo_details.get("vidid"):
+                 self._search_cache[mongo_details["vidid"]] = mongo_details
+            return mongo_details
+            
+        # 4. Cache ထဲမှာမရှိရင် YouTube ကို တကယ်သွားရှာပါ
+        logger.info(f"Cache Miss. Fetching from YouTube: {cache_key}")
         details = await self._fetch_from_youtube(link)
         
-        # 3. ရှာတွေ့ခဲ့ရင် Cache ထဲကို vidid နဲ့ပါ ထပ်သိမ်းပါ
-        if details:
-            self._search_cache[details["vidid"]] = details
-            
+        # 5. _fetch_from_youtube က cache ထဲ သိမ်းပြီးသားဖြစ်ပါမည်
+        
         return details
 
     # --- END: Caching Logic Functions ---
 
-    # --- START: Caching ကို အသုံးပြုထားသော Functions များ ---
+
+    # --- START: Caching ကို အသုံးပြုထားသော Functions များ (မူလအတိုင်း) ---
 
     async def details(self, link: str, videoid: Union[bool, str] = None):
         details = await self._get_video_details(link, videoid)
@@ -474,7 +509,7 @@ class YouTubeAPI:
 
     # --- END: မူလ Functions များ ---
 
-    # --- START: API-First Download Function ---
+    # --- START: API-First Download Function (DB File Path Cache ဖြင့် ပြင်ဆင်ပြီး) ---
 
     async def download(
         self,
@@ -491,7 +526,6 @@ class YouTubeAPI:
             link = self.base + link
         loop = asyncio.get_running_loop()
         
-        # cookie file path ကို တစ်ခါတည်း ရယူထားပါ
         cookie_file = get_cookies()
 
         def audio_dl():
@@ -619,21 +653,35 @@ class YouTubeAPI:
                     direct = True
                     downloaded_file = await loop.run_in_executor(None, video_dl)
         else:
-            # --- START: API Logic ---
-            # Default audio download: Try API first
+            # --- START: API Logic (DB File Path Cache ဖြင့်) ---
             downloaded_file = None
             direct = True  # API or audio_dl will be a direct file path
+            video_id = None # video_id ကို အစပြုထားပါ
 
             try:
                 # 1. Get video_id from link
                 video_id = extract_video_id(link)
                 
-                # 2. Try downloading via API (run sync 'api_dl' in executor)
-                logger.info(f"Attempting API download for {video_id}...")
+                # --- START: DB Cache Check (ထပ်တိုးထားသည်) ---
+                cached_path = await get_cached_song_path(video_id)
+                if cached_path:
+                    if os.path.exists(cached_path):
+                        # File တကယ်ရှိနေသေးရင် (1-second playback)
+                        logger.info(f"DB Cache Hit (File Exists): {cached_path}")
+                        downloaded_file = cached_path
+                        return downloaded_file, direct # ချက်ချင်းပြန်ပေးလိုက်ပါ
+                    else:
+                        # File မရှိတော့ရင် (Clean Mode ကြောင့်) DB ကနေ ဖယ်ရှားပါ
+                        logger.warning(f"DB Cache Stale (File Missing): {cached_path}. Removing entry.")
+                        await remove_cached_song_path(video_id)
+                # --- END: DB Cache Check ---
+
+                # --- (DB Cache မှာ မရှိမှသာ ဆက်လက် download လုပ်ပါ) ---
+                logger.info(f"DB Cache Miss. Attempting API download for {video_id}...")
                 downloaded_file = await loop.run_in_executor(
-                    None,      # Use default thread pool
-                    api_dl,    # The synchronous function to run
-                    video_id   # The argument for api_dl
+                    None,     # Use default thread pool
+                    api_dl,   # The synchronous function to run
+                    video_id  # The argument for api_dl
                 )
 
             except ValueError as e:
@@ -652,6 +700,21 @@ class YouTubeAPI:
                 downloaded_file = await loop.run_in_executor(None, audio_dl)
             else:
                 logger.info(f"API download successful: {downloaded_file}")
+                
+            # --- START: Save to DB Cache (ထပ်တိုးထားသည်) ---
+            if downloaded_file and video_id:
+                # Download အောင်မြင်ခဲ့လျှင် DB မှာ သိမ်းထားပါ
+                await save_cached_song_path(video_id, downloaded_file)
+            elif downloaded_file and not video_id:
+                # Fallback (audio_dl) ကနေလာရင် video_id ကို file name ကနေ ယူ
+                try:
+                    # file name က "downloads/VIDEO_ID.ext" format ဖြစ်
+                    vid_from_path = os.path.basename(downloaded_file).split('.')[0]
+                    if len(vid_from_path) == 11: # video_id format (ခန့်မှန်း)
+                        await save_cached_song_path(vid_from_path, downloaded_file)
+                except Exception as e:
+                    logger.error(f"Could not save fallback path to DB: {e}")
+            # --- END: Save to DB Cache ---
             # --- END: API Logic ---
 
         return downloaded_file, direct
