@@ -79,7 +79,7 @@ async def stream(
                 try:
                     await mystic.edit_text(_["play_dl"].format(title))
                 except KeyError:
-                    await mystic.edit_text(f"●Dᴏᴡɴʟᴏᴀᴅ ဆွဲနေပါသည်● {title}")
+                    await mystic.edit_text(f"Dow͟n͟l͟o͟a͟d͟ ဆွဲနေပါသည် ● ᥫ᭡ {title}")
                 # --- END OF MODIFICATION ---
 
                 try:
@@ -156,7 +156,7 @@ async def stream(
         try:
             await mystic.edit_text(_["play_dl"].format(title))
         except KeyError:
-            await mystic.edit_text(f"●Dᴏᴡɴʟᴏᴀᴅ ဆွဲနေပါသည်● {title}")
+            await mystic.edit_text(f"Dow͟n͟l͟o͟a͟d͟ ဆွဲနေပါသည် ● ᥫ᭡ {title}")
         # --- END OF MODIFICATION ---
 
         try:
