@@ -1,3 +1,4 @@
+#youtube.py
 import asyncio
 import os
 import re
@@ -5,21 +6,27 @@ import json
 from typing import Union
 
 import yt_dlp
-import requests  # <-- Error 1: မမြင်ရတဲ့ space ကို ဖယ်ရှားထားသည်
+import requests
 from pyrogram.enums import MessageEntityType
 from pyrogram.types import Message
 from youtubesearchpython.__future__ import VideosSearch
 
-# --- (ဒီနေရာကို ပြင်ဆင်/ထပ်ထည့်ပါ) ---
-from maythusharmusic.utils.database.youtubedatabase import (
-    is_on_off,
-    get_yt_cache,  # Search Result Cache
-    save_yt_cache, # Search Result Cache
-    get_cached_song_path,  # File Path Cache
-    save_cached_song_path, # File Path Cache
-    remove_cached_song_path, # File Path Cache
-    get_all_yt_cache  # <-- Error 2: ကျန်နေတာကို ထပ်ဖြည့်ထားသည်
-)
+# --- (youtubedatabase.py ကို သီးသန့် import လုပ်ပါ) ---
+# --- (get_all_yt_cache function အသစ်ကိုပါ import လုပ်ပါ) ---
+try:
+    from maythusharmusic.utils.database.youtubedatabase import (
+        is_on_off,
+        get_yt_cache,
+        save_yt_cache,
+        get_cached_song_path,
+        save_cached_song_path,
+        remove_cached_song_path,
+        get_all_yt_cache  # <-- (Function အသစ်)
+    )
+except ImportError:
+    print("FATAL ERROR: youtubedatabase.py ကို ရှာမတွေ့ပါ")
+    # ဒီနေရာမှာ bot ကို ရပ်သင့်ရင် ရပ်နိုင်ပါတယ်
+    raise
 # --- (ဒီနေရာအထိ) ---
 from maythusharmusic.utils.formatters import time_to_seconds
 
@@ -27,7 +34,7 @@ import os
 import glob
 import random
 import logging
-import aiohttp # aiohttp import ကို ထည့်သွင်းထားသည်
+import aiohttp
 
 # Logger ကို သတ်မှတ်ခြင်း
 logging.basicConfig(level=logging.INFO)
@@ -59,7 +66,9 @@ API_KEYS = [
 
 def get_random_api_key():
     """Randomly select an API key from the list"""
-    return random.choice(API_KEYS)  # <-- Error 3: IndentationError ကို ပြင်ထားသည်
+    # --- (ပြင်ဆင်ပြီး) ---
+    # Line 67: Error ဖြစ်စေသော U+00A0 space ကို ဖယ်ရှားပြီး standard space 4 ခု ထည့်ထားသည်။
+    return random.choice(API_KEYS)
 
 API_BASE_URL = "http://deadlinetech.site"
 
@@ -243,10 +252,31 @@ class YouTubeAPI:
         self.regex = r"(?:youtube\.com|youtu\.be)"
         self.status = "https://www.youtube.com/oembed?url="
         self.listbase = "https://youtube.com/playlist?list="
-        self.reg = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0?]*[ -/]*[@-~])")
+        self.reg = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
 
-        # --- Caching အတွက် Dictionary ---
+        # --- Caching အတွက် Dictionary (Bot run ချိန်မှာ အလွတ်ဖြစ်နေပါမယ်) ---
         self._search_cache = {}
+
+    # --- (FUNCTION အသစ် - Bot Startup တွင် ခေါ်ရန်) ---
+    async def load_cache(self):
+        """
+        Bot startup တွင် MongoDB မှ cache များကို ယာယီမှတ်ဉာဏ်ထဲသို့ ကြိုတင်ဖြည့်သည်
+        (Hydrates the in-memory cache from permanent DB on startup)
+        """
+        logger.info("MongoDB မှ YouTube search cache များကို ကြိုတင်ဖြည့်နေပါသည်...")
+        try:
+            # youtubedatabase.py ထဲက function အသစ်ကို ခေါ်ပါ
+            all_cache = await get_all_yt_cache()
+            if all_cache:
+                # DB ကရလာတဲ့ data တွေအားလုံးကို ယာယီမှတ်ဉာဏ်ထဲ ထည့်ပါ
+                self._search_cache = all_cache
+                logger.info(f"Cache {len(all_cache)} ခုကို ယာယီမှတ်ဉာဏ်ထဲသို့ အောင်မြင်စွာ ကြိုဖြည့်ပြီးပါပြီ။")
+            else:
+                logger.info("MongoDB တွင် ကြိုတင်ဖြည့်ရန် cache တစုံတရာ မရှိပါ။")
+        except Exception as e:
+            logger.error(f"YouTube cache ကြိုတင်ဖြည့်ရာတွင် အမှားဖြစ်ပွား: {e}")
+    # --- (FUNCTION အသစ် ဒီမှာဆုံး) ---
+
 
     async def exists(self, link: str, videoid: Union[bool, str] = None):
         if videoid:
@@ -346,19 +376,19 @@ class YouTubeAPI:
         # 1. Cache Key ကို သတ်မှတ်ပါ (link ကို key အဖြစ် သုံးပါမည်)
         cache_key = link
 
-        # 2. In-Memory Cache (Dictionary) ထဲမှာ အရင်ရှာကြည့်ပါ
+        # 2. ယာယီမှတ်ဉာဏ် (Pre-load လုပ်ထားတဲ့) ထဲမှာ အရင်ရှာပါ
         if cache_key in self._search_cache:
             logger.info(f"Cache Hit (Memory): {cache_key}")
             return self._search_cache[cache_key]
 
-        # 3. MongoDB Cache (ytcache_db) ထဲမှာ ရှာကြည့်ပါ
+        # 3. ယာယီထဲမှာ မရှိမှ MongoDB (အမြဲတမ်း မှတ်ဉာဏ်) ထဲမှာ ရှာကြည့်ပါ
         mongo_details = await get_yt_cache(cache_key)
         if mongo_details:
             logger.info(f"Cache Hit (MongoDB): {cache_key}")
             # MongoDB မှာတွေ့ရင် In-Memory cache ထဲကို ပြန်ထည့်ပါ
             self._search_cache[cache_key] = mongo_details
             if mongo_details.get("vidid"):
-                self._search_cache[mongo_details["vidid"]] = mongo_details # <-- Error 4: IndentationError ကို ပြင်ထားသည်
+                self._search_cache[mongo_details["vidid"]] = mongo_details
             return mongo_details
 
         # 4. Cache ထဲမှာမရှိရင် YouTube ကို တကယ်သွားရှာပါ
@@ -531,8 +561,7 @@ class YouTubeAPI:
 
         def audio_dl():
             ydl_optssx = {
-                # --- (MP4 Support အတွက် ပြင်ဆင်ထားသည်) ---
-                "format": "bestaudio[ext=m4a]/bestaudio/best",
+                "format": "m4a/bestaudio/best",  # <-- (MP4 Support အတွက် ပြင်ဆင်ထားသည်)
                 "outtmpl": "downloads/%(id)s.%(ext)s",
                 "geo_bypass": True,
                 "nocheckcertificate": True,
@@ -553,15 +582,12 @@ class YouTubeAPI:
 
         def video_dl():
             ydl_optssx = {
-                # --- (Video Download ပိုကောင်းအောင် ပြင်ဆင်ထားသည်) ---
-                "format": "bestvideo[height<=?720][width<=?1280]+bestaudio/best[height<=?720][width<=?1280]",
+                "format": "(bestvideo[height<=?720][width<=?1280][ext=mp4])+(bestaudio[ext=m4a])",
                 "outtmpl": "downloads/%(id)s.%(ext)s",
                 "geo_bypass": True,
                 "nocheckcertificate": True,
                 "quiet": True,
                 "no_warnings": True,
-                "prefer_ffmpeg": True, # <-- Merge လုပ်ဖို့ ffmpeg သုံးခိုင်းပါ
-                "merge_output_format": "mp4", # <-- Merge ပြီးရင် mp4 နဲ့ ထုတ်ခိုင်းပါ
             }
             # cookie file ရှိလျှင် options ထဲ ထည့်ပါ
             if cookie_file:
@@ -569,12 +595,10 @@ class YouTubeAPI:
 
             x = yt_dlp.YoutubeDL(ydl_optssx)
             info = x.extract_info(link, False)
-            # --- (Merge လုပ်ရင် ext က .mp4 ဖြစ်လာမှာမို့ ပြင်ဆင်ထားသည်) ---
-            xyz = os.path.join("downloads", f"{info['id']}.mp4") 
+            xyz = os.path.join("downloads", f"{info['id']}.{info['ext']}")
             if os.path.exists(xyz):
                 return xyz
             x.download([link])
-            # --- (Merge လုပ်ပြီးရင် .webm စတာတွေ ကျန်ခဲ့တတ်လို့ .mp4 ကိုပဲ ပြန်ပေးပါ) ---
             return xyz
 
         def song_video_dl():
@@ -639,8 +663,7 @@ class YouTubeAPI:
                     "yt-dlp",
                     "-g",
                     "-f",
-                    # --- (Video Download ပိုကောင်းအောင် ပြင်ဆင်ထားသည်) ---
-                    "bestvideo[height<=?720][width<=?1280]+bestaudio/best[height<=?720][width<=?1280]",
+                    "best[height<=?720][width<=?1280]",
                 ]
                 # cookie file ရှိလျှင် command ထဲ ထည့်ပါ
                 if cookie_file:
