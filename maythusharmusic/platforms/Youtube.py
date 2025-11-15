@@ -11,7 +11,7 @@ from pyrogram.types import Message
 from youtubesearchpython.__future__ import VideosSearch
 
 # --- (ဒီနေရာကို ပြင်ဆင်/ထပ်ထည့်ပါ) ---
-from maythusharmusic.utils.database import (
+from maythusharmusic.utils.database.youtubedatabase import (
     is_on_off,
     get_yt_cache,  # Search Result Cache
     save_yt_cache, # Search Result Cache
