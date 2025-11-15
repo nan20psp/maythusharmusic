@@ -5,7 +5,7 @@ import json
 from typing import Union
 
 import yt_dlp
-import requests  # api_dl အတွက် ထည့်သွင်းထားသည်
+import requests  # <-- Error 1: မမြင်ရတဲ့ space ကို ဖယ်ရှားထားသည်
 from pyrogram.enums import MessageEntityType
 from pyrogram.types import Message
 from youtubesearchpython.__future__ import VideosSearch
@@ -17,7 +17,8 @@ from maythusharmusic.utils.database.youtubedatabase import (
     save_yt_cache, # Search Result Cache
     get_cached_song_path,  # File Path Cache
     save_cached_song_path, # File Path Cache
-    remove_cached_song_path # File Path Cache
+    remove_cached_song_path, # File Path Cache
+    get_all_yt_cache  # <-- Error 2: ကျန်နေတာကို ထပ်ဖြည့်ထားသည်
 )
 # --- (ဒီနေရာအထိ) ---
 from maythusharmusic.utils.formatters import time_to_seconds
@@ -53,12 +54,12 @@ API_KEYS = [
     "AIzaSyAsxU61WrtIE1dRe1YZDV0XkP_n8sJggPk",
     "AIzaSyA70vtRZ-HtXAdwQTNIhaiAhb5RUPQHJVA",
     "AIzaSyDMUPINKHWjXfH3rX2kwYiH8sGtiQF4bHs",
-    "AIzaSyAfCk6zut2ggu_qJ3WrH_iYlvVc3upG9lk" 
+    "AIzaSyAfCk6zut2ggu_qJ3WrH_iYlvVc3upG9lk"
 ]
 
 def get_random_api_key():
     """Randomly select an API key from the list"""
-    return random.choice(API_KEYS)
+    return random.choice(API_KEYS)  # <-- Error 3: IndentationError ကို ပြင်ထားသည်
 
 API_BASE_URL = "http://deadlinetech.site"
 
@@ -78,7 +79,7 @@ def extract_video_id(link: str) -> str:
             return match.group(1)
 
     raise ValueError("Invalid YouTube link provided.")
-    
+
 
 def api_dl(video_id: str) -> str | None:
     # Use random API key
@@ -131,13 +132,13 @@ def get_cookies():
     """
     global _cookies_warned
     cookie_path = "maythusharmusic/cookies/cookies.txt"
-    
+
     if not os.path.exists(cookie_path):
         if not _cookies_warned:
             _cookies_warned = True
             logger.warning(f"{cookie_path} ကို ရှာမတွေ့ပါ၊ download များ မအောင်မြင်နိုင်ပါ။")
         return None
-        
+
     return cookie_path
 
 async def save_cookies(urls: list[str]) -> None:
@@ -147,15 +148,15 @@ async def save_cookies(urls: list[str]) -> None:
     if not urls:
         logger.warning("save_cookies သို့ URL များ ပေးပို့မထားပါ။")
         return
-    
+
     logger.info("ပထမဆုံး URL မှ cookie ကို cookies.txt တွင် သိမ်းဆည်းနေပါသည်...")
     url = urls[0]  # ပထမဆုံး URL ကိုသာ အသုံးပြုမည်
     path = "maythusharmusic/cookies/cookies.txt"
     link = url.replace("me/", "me/raw/")
-    
+
     # Cookie သိမ်းဆည်းမည့် directory ရှိမရှိ စစ်ဆေးပြီး မရှိပါက တည်ဆောက်သည်
     os.makedirs(os.path.dirname(path), exist_ok=True)
-        
+
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(link) as resp:
@@ -171,21 +172,21 @@ async def save_cookies(urls: list[str]) -> None:
 
 async def check_file_size(link):
     async def get_format_info(link):
-        
+
         # --- Cookie Logic ---
         # 1. (ဒီ file ထဲမှာ ရှိပြီးသား) get_cookies() function ကို ခေါ်သုံးပါ
-        cookie_file = get_cookies() 
-        
+        cookie_file = get_cookies()
+
         # 2. Command arguments တွေကို list အနေနဲ့ တည်ဆောက်ပါ
         proc_args = [
             "yt-dlp",
             "-J", # JSON output
         ]
-        
+
         # 3. Cookie file ရှိခဲ့ရင် command ထဲကို ထည့်ပါ
         if cookie_file:
             proc_args.extend(["--cookies", cookie_file])
-        
+
         # 4. နောက်ဆုံးမှာ link ကို ထည့်ပါ
         proc_args.append(link)
         # --- End Cookie Logic ---
@@ -211,12 +212,12 @@ async def check_file_size(link):
     info = await get_format_info(link)
     if info is None:
         return None
-    
+
     formats = info.get('formats', [])
     if not formats:
         print("No formats found.")
         return None
-    
+
     total_size = parse_size(formats)
     return total_size
 
@@ -242,8 +243,8 @@ class YouTubeAPI:
         self.regex = r"(?:youtube\.com|youtu\.be)"
         self.status = "https://www.youtube.com/oembed?url="
         self.listbase = "https://youtube.com/playlist?list="
-        self.reg = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
-        
+        self.reg = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0?]*[ -/]*[@-~])")
+
         # --- Caching အတွက် Dictionary ---
         self._search_cache = {}
 
@@ -303,7 +304,7 @@ class YouTubeAPI:
             duration_sec = 0
         else:
             duration_sec = int(time_to_seconds(duration_min))
-            
+
         # အချက်အလက် အစုံအလင်ကို Dictionary အဖြစ် တည်ဆောက်ပါ
         video_details = {
             "title": title,
@@ -313,23 +314,23 @@ class YouTubeAPI:
             "vidid": vidid,
             "link": yturl, # track method အတွက်
         }
-        
+
         # --- START: Cache Logic (In-Memory & MongoDB) ---
-        
+
         # 1. In-memory cache ထဲကို vidid ကို key အနေနဲ့ သုံးပြီး သိမ်းထားပါ
         self._search_cache[vidid] = video_details
         # 2. In-memory cache ထဲကို Link ကို key အနေနဲ့ သုံးပြီးလည်း သိမ်းထားပါ
         self._search_cache[link] = video_details
-        
+
         # 3. MongoDB Cache (ytcache_db) ထဲကို vidid ကို key အနေနဲ့ သုံးပြီး သိမ်းပါ
         await save_yt_cache(vidid, video_details)
         # 4. MongoDB Cache (ytcache_db) ထဲကို Link ကို key အနေနဲ့ သုံးပြီးလည်း သိမ်းပါ
         await save_yt_cache(link, video_details)
-        
+
         logger.info(f"Saved Search Result to MongoDB Cache: {vidid} / {link}")
-        
+
         # --- END: Cache Logic ---
-        
+
         return video_details
 
     async def _get_video_details(self, link: str, videoid: Union[bool, str] = None):
@@ -349,7 +350,7 @@ class YouTubeAPI:
         if cache_key in self._search_cache:
             logger.info(f"Cache Hit (Memory): {cache_key}")
             return self._search_cache[cache_key]
-            
+
         # 3. MongoDB Cache (ytcache_db) ထဲမှာ ရှာကြည့်ပါ
         mongo_details = await get_yt_cache(cache_key)
         if mongo_details:
@@ -357,15 +358,15 @@ class YouTubeAPI:
             # MongoDB မှာတွေ့ရင် In-Memory cache ထဲကို ပြန်ထည့်ပါ
             self._search_cache[cache_key] = mongo_details
             if mongo_details.get("vidid"):
-                 self._search_cache[mongo_details["vidid"]] = mongo_details
+                self._search_cache[mongo_details["vidid"]] = mongo_details # <-- Error 4: IndentationError ကို ပြင်ထားသည်
             return mongo_details
-            
+
         # 4. Cache ထဲမှာမရှိရင် YouTube ကို တကယ်သွားရှာပါ
         logger.info(f"Cache Miss. Fetching from YouTube: {cache_key}")
         details = await self._fetch_from_youtube(link)
-        
+
         # 5. _fetch_from_youtube က cache ထဲ သိမ်းပြီးသားဖြစ်ပါမည်
-        
+
         return details
 
     # --- END: Caching Logic Functions ---
@@ -377,7 +378,7 @@ class YouTubeAPI:
         details = await self._get_video_details(link, videoid)
         if not details:
             return None, None, 0, None, None
-            
+
         return (
             details["title"],
             details["duration_min"],
@@ -402,7 +403,7 @@ class YouTubeAPI:
         details = await self._get_video_details(link, videoid)
         if not details:
             return {}, None
-            
+
         track_details = {
             "title": details["title"],
             "link": details["link"],
@@ -458,7 +459,7 @@ class YouTubeAPI:
             link = self.base + link
         if "&" in link:
             link = link.split("&")[0]
-        ytdl_opts = { "quiet": True } 
+        ytdl_opts = { "quiet": True }
         ydl = yt_dlp.YoutubeDL(ytdl_opts)
         with ydl:
             formats_available = []
@@ -487,7 +488,7 @@ class YouTubeAPI:
                             "yturl": link,
                         }
                     )
-        return formats_available, link
+            return formats_available, link
 
     async def slider(
         self,
@@ -525,12 +526,13 @@ class YouTubeAPI:
         if videoid:
             link = self.base + link
         loop = asyncio.get_running_loop()
-        
+
         cookie_file = get_cookies()
 
         def audio_dl():
             ydl_optssx = {
-                "format": "bestaudio/best",
+                # --- (MP4 Support အတွက် ပြင်ဆင်ထားသည်) ---
+                "format": "bestaudio[ext=m4a]/bestaudio/best",
                 "outtmpl": "downloads/%(id)s.%(ext)s",
                 "geo_bypass": True,
                 "nocheckcertificate": True,
@@ -540,7 +542,7 @@ class YouTubeAPI:
             # cookie file ရှိလျှင် options ထဲ ထည့်ပါ
             if cookie_file:
                 ydl_optssx["cookiefile"] = cookie_file
-                
+
             x = yt_dlp.YoutubeDL(ydl_optssx)
             info = x.extract_info(link, False)
             xyz = os.path.join("downloads", f"{info['id']}.{info['ext']}")
@@ -551,23 +553,28 @@ class YouTubeAPI:
 
         def video_dl():
             ydl_optssx = {
-                "format": "(bestvideo[height<=?720][width<=?1280][ext=mp4])+(bestaudio[ext=m4a])",
+                # --- (Video Download ပိုကောင်းအောင် ပြင်ဆင်ထားသည်) ---
+                "format": "bestvideo[height<=?720][width<=?1280]+bestaudio/best[height<=?720][width<=?1280]",
                 "outtmpl": "downloads/%(id)s.%(ext)s",
                 "geo_bypass": True,
                 "nocheckcertificate": True,
                 "quiet": True,
                 "no_warnings": True,
+                "prefer_ffmpeg": True, # <-- Merge လုပ်ဖို့ ffmpeg သုံးခိုင်းပါ
+                "merge_output_format": "mp4", # <-- Merge ပြီးရင် mp4 နဲ့ ထုတ်ခိုင်းပါ
             }
             # cookie file ရှိလျှင် options ထဲ ထည့်ပါ
             if cookie_file:
                 ydl_optssx["cookiefile"] = cookie_file
-                
+
             x = yt_dlp.YoutubeDL(ydl_optssx)
             info = x.extract_info(link, False)
-            xyz = os.path.join("downloads", f"{info['id']}.{info['ext']}")
+            # --- (Merge လုပ်ရင် ext က .mp4 ဖြစ်လာမှာမို့ ပြင်ဆင်ထားသည်) ---
+            xyz = os.path.join("downloads", f"{info['id']}.mp4") 
             if os.path.exists(xyz):
                 return xyz
             x.download([link])
+            # --- (Merge လုပ်ပြီးရင် .webm စတာတွေ ကျန်ခဲ့တတ်လို့ .mp4 ကိုပဲ ပြန်ပေးပါ) ---
             return xyz
 
         def song_video_dl():
@@ -586,7 +593,7 @@ class YouTubeAPI:
             # cookie file ရှိလျှင် options ထဲ ထည့်ပါ
             if cookie_file:
                 ydl_optssx["cookiefile"] = cookie_file
-                
+
             x = yt_dlp.YoutubeDL(ydl_optssx)
             x.download([link])
 
@@ -611,7 +618,7 @@ class YouTubeAPI:
             # cookie file ရှိလျှင် options ထဲ ထည့်ပါ
             if cookie_file:
                 ydl_optssx["cookiefile"] = cookie_file
-                
+
             x = yt_dlp.YoutubeDL(ydl_optssx)
             x.download([link])
 
@@ -632,7 +639,8 @@ class YouTubeAPI:
                     "yt-dlp",
                     "-g",
                     "-f",
-                    "best[height<=?720][width<=?1280]",
+                    # --- (Video Download ပိုကောင်းအောင် ပြင်ဆင်ထားသည်) ---
+                    "bestvideo[height<=?720][width<=?1280]+bestaudio/best[height<=?720][width<=?1280]",
                 ]
                 # cookie file ရှိလျှင် command ထဲ ထည့်ပါ
                 if cookie_file:
@@ -649,7 +657,7 @@ class YouTubeAPI:
                     downloaded_file = stdout.decode().split("\n")[0]
                     direct = False
                 else:
-                    
+
                     direct = True
                     downloaded_file = await loop.run_in_executor(None, video_dl)
         else:
@@ -661,7 +669,7 @@ class YouTubeAPI:
             try:
                 # 1. Get video_id from link
                 video_id = extract_video_id(link)
-                
+
                 # --- START: DB Cache Check (ထပ်တိုးထားသည်) ---
                 cached_path = await get_cached_song_path(video_id)
                 if cached_path:
@@ -679,9 +687,9 @@ class YouTubeAPI:
                 # --- (DB Cache မှာ မရှိမှသာ ဆက်လက် download လုပ်ပါ) ---
                 logger.info(f"DB Cache Miss. Attempting API download for {video_id}...")
                 downloaded_file = await loop.run_in_executor(
-                    None,     # Use default thread pool
-                    api_dl,   # The synchronous function to run
-                    video_id  # The argument for api_dl
+                    None,      # Use default thread pool
+                    api_dl,    # The synchronous function to run
+                    video_id   # The argument for api_dl
                 )
 
             except ValueError as e:
@@ -700,7 +708,7 @@ class YouTubeAPI:
                 downloaded_file = await loop.run_in_executor(None, audio_dl)
             else:
                 logger.info(f"API download successful: {downloaded_file}")
-                
+
             # --- START: Save to DB Cache (ထပ်တိုးထားသည်) ---
             if downloaded_file and video_id:
                 # Download အောင်မြင်ခဲ့လျှင် DB မှာ သိမ်းထားပါ
