@@ -7,7 +7,7 @@ from pyrogram import filters
 
 load_dotenv()
 
-COOKIE_URL = "https://batbin.me/chronocrator"
+#COOKIE_URL = "https://batbin.me/chronocrator"
 
 # Get this value from my.telegram.org/apps
 API_ID = int(getenv("API_ID", None))
