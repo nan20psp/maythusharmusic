@@ -170,7 +170,7 @@ async def stream(
             await put_queue(
                 chat_id,
                 original_chat_id,
-                file_path if direct else f"vid_{vidid}",
+                file_path,  # <-- (FAST JOIN ပြင်ဆင်မှု ၁)
                 title,
                 duration_min,
                 user_name,
@@ -198,7 +198,7 @@ async def stream(
             await put_queue(
                 chat_id,
                 original_chat_id,
-                file_path if direct else f"vid_{vidid}",
+                file_path,  # <-- (FAST JOIN ပြင်ဆင်မှု ၂)
                 title,
                 duration_min,
                 user_name,
