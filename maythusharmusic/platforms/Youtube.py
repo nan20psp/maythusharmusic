@@ -1,4 +1,4 @@
-#youtube.py (Fast Join + Video/Audio Fix)
+#youtube.py (Fast Join - 2 Second ဖြင့် ပြင်ဆင်ပြီး)
 import asyncio
 import os
 import re
@@ -443,28 +443,19 @@ class YouTubeAPI:
 
     # --- END: Caching ကို အသုံးပြုထားသော Functions များ ---
 
-    # --- START: Live Stream အတွက် Function (ဒါကိုပါ ပြင်ရပါမယ်) ---
+    # --- START: မူလ Functions များ (Caching မလိုပါ) ---
 
     async def video(self, link: str, videoid: Union[bool, str] = None):
         if videoid:
             link = self.base + link
         if "&" in link:
             link = link.split("&")[0]
-            
-        cookie_file = get_cookies() # <-- Cookie ကိုပါ သုံးပါ
-        proc_args = [
+        proc = await asyncio.create_subprocess_exec(
             "yt-dlp",
             "-g",
             "-f",
-            # --- (Live Stream မှာလည်း အသံပါအောင် ပြင်ဆင်ထားသည်) ---
-            "best[height<=?720][acodec!=none]/best[height<=?720]",
-        ]
-        if cookie_file:
-            proc_args.extend(["--cookies", cookie_file])
-        proc_args.append(link)
-            
-        proc = await asyncio.create_subprocess_exec(
-            *proc_args,
+            "best[height<=?720][width<=?1280]",
+            f"{link}",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
@@ -686,10 +677,7 @@ class YouTubeAPI:
             # --- This is the FAST JOIN (2-Second) part ---
             if video:
                 logger.info(f"Fast Join (Video) requested for: {link}")
-                # --- (START: အသံမပါတဲ့ ပြဿနာကို ဖြေရှင်းရန်) ---
-                # "bestvideo+bestaudio" (အသံမပါ) အစား "ရုပ်ရောသံရောပါတဲ့" format ကို တောင်းပါ
-                format = "best[height<=?720][acodec!=none]/best[ext=mp4][height<=?720]/best[height<=?720]"
-                # --- (END: ဖြေရှင်းရန်) ---
+                format = "bestvideo[height<=?720][width<=?1280]+bestaudio/best[height<=?720][width<=?1280]"
                 fallback_func = video_dl_fallback
             else:
                 logger.info(f"Fast Join (Audio) requested for: {link}")
