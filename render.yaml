@@ -8,18 +8,18 @@ services:
     buildCommand: pip3 install --no-cache-dir --upgrade --requirement requirements.txt
     envVars:
       - key: API_ID
-        value: ""
+        sync: ""
       - key: API_HASH
-        value: ""
+        sync: ""
       - key: STORAGE_CHANNEL_ID
-        value: ""
+        sync: ""
       - key: BOT_TOKEN
-        value: ""
+        sync: ""
       - key: MONGO_DB_URI
-        value: ""
+        sync: ""
       - key: OWNER_ID
-        value: ""
+        sync: ""
       - key: LOGGER_ID
-        value: ""
+        sync: ""
       - key: STRING_SESSION
-        value: ""
+        sync: ""
